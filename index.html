@@ -179,7 +179,7 @@ let orders = [];
 let lastSeen = null;
 let polling = false;
 let pollTimer = null;
-let ownerStatus = { ts: 0, busy: false };
+let ownerStatus = { ts: 0, busy: false, riding: false };
 
 /* ---------- 本地存储 ---------- */
 function loadOrders() {
@@ -261,6 +261,7 @@ async function poll() {
       if (d.action === 'status') {
         ownerStatus.ts = d.ts || (m.time ? m.time * 1000 : Date.now());
         ownerStatus.busy = !!d.busy;
+        ownerStatus.riding = !!d.riding;
         changed = true;
         continue;
       }
@@ -299,18 +300,26 @@ function renderStatus() {
   const txt = document.getElementById('statusText');
   if (!dot || !txt) return;
 
+  // 本机如果有「骑行中」的单，也算占用
+  const localRiding = orders.some(o => o.status === 'unlocked');
+  const riding = ownerStatus.riding || localRiding;
   const age = Date.now() - ownerStatus.ts;
+
   if (!ownerStatus.ts || age > 120 * 1000) {
     dot.className = 'status-dot off';
     txt.textContent = '车主不在线 · 暂时借不了';
     txt.style.color = '#999';
+  } else if (riding) {
+    dot.className = 'status-dot busy';
+    txt.textContent = '占用中 · 有人正在骑行';
+    txt.style.color = '#fa8c16';
   } else if (ownerStatus.busy) {
     dot.className = 'status-dot busy';
-    txt.textContent = '车主正在处理上一单 · 稍等';
+    txt.textContent = '正在开锁/关锁 · 稍等';
     txt.style.color = '#fa8c16';
   } else {
     dot.className = 'status-dot on';
-    txt.textContent = '可以借车';
+    txt.textContent = '空闲 · 可以借车';
     txt.style.color = '#2bb566';
   }
 }
