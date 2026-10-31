@@ -100,7 +100,12 @@
 </div>
 
 <div class="card">
-  <div class="card-title">我的骑行<span class="right" id="pollLabel"></span></div>
+  <div class="card-title">我的骑行
+    <span class="right">
+      <a href="javascript:void(0)" onclick="clearOrders()"
+         style="color:#aaa;text-decoration:none">清空记录</a>
+    </span>
+  </div>
   <div id="orders"><div class="empty">暂无记录</div></div>
 </div>
 
@@ -275,10 +280,13 @@ async function submitUnlock() {
   const no = input.value.replace(/\D/g, '');
   if (!/^\d{8}$/.test(no)) { toast('请输入 8 位编号'); return; }
 
-  const dup = orders.find(o => o.bikeNo === no &&
-    (o.status === 'sent' || o.status === 'unlocked') &&
-    Date.now() - o.ts < 60000);
-  if (dup) { toast('这辆车刚提交过'); return; }
+  // 同一辆车还有进行中的单就别重复提交
+  const dup = orders.find(o =>
+    o.bikeNo === no &&
+    (o.status === 'unlocked' ||
+     (o.status === 'sent' && Date.now() - o.ts < 3 * 60 * 1000))
+  );
+  if (dup) { toast('这辆车还有进行中的单'); return; }
 
   const btn = document.getElementById('submitBtn');
   btn.disabled = true;
@@ -355,7 +363,14 @@ function render() {
 
     switch (o.status) {
       case 'sent':
-        label = '等待朋友开锁'; cls = 'st-wait';
+        // 超过 3 分钟还没回执，说明车主端没处理，别再干等着
+        if (Date.now() - o.ts > 3 * 60 * 1000) {
+          label = '无响应'; cls = 'st-bad'; cardCls = 'bad';
+          action = '<button class="btn btn-ghost" style="margin-top:12px;font-size:14px;padding:11px" ' +
+                   'onclick="retry(\'' + o.id + '\')">重新提交</button>';
+        } else {
+          label = '等待朋友开锁'; cls = 'st-wait';
+        }
         break;
       case 'unlocked':
         label = '骑行中'; cls = 'st-run';
@@ -389,6 +404,14 @@ function render() {
       action +
     '</div>';
   }).join('');
+}
+
+function clearOrders() {
+  if (!confirm('清空本机的骑行记录？\n（只影响这个页面，不影响手机端的骑行状态）')) return;
+  orders = [];
+  saveOrders();
+  render();
+  toast('记录已清空');
 }
 
 async function retry(id) {
@@ -429,10 +452,6 @@ document.getElementById('bikeNo').addEventListener('input', e => {
   loadOrders();
   render();
   loop();
-  setInterval(() => {
-    const el = document.getElementById('pollLabel');
-    if (lastSeen) el.textContent = '同步中';
-  }, 5000);
 })();
 </script>
 </body>
