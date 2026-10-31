@@ -115,7 +115,8 @@
    再回一条 ack，这里据此更新状态。
    ============================================================ */
 
-const NTFY = 'https://ntfy.sh/';
+// ntfy.sh 在国内会被整段阻断，改用可访问的公共实例
+const NTFY = 'https://ntfy.envs.net/';
 const NEED_PIN = false;                  // 车主设了口令才改成 true
 
 /* 密钥不放代码里：从分享链接的 ?topic=xxx&k=xxx 读取，并存在本机
