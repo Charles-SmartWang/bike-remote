@@ -44,6 +44,13 @@
   .btn-ghost { background: #f0f2f5; color: #555; }
   .btn:disabled { background: #e5e6e8 !important; color: #aaa !important; }
 
+  .prog { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+  .prog-track { flex: 1; height: 7px; background: #e9edf2; border-radius: 99px; overflow: hidden; }
+  .prog-bar { height: 100%; width: 0; border-radius: 99px; transition: width .25s linear; }
+  .prog-pct { font-size: 12px; font-weight: 600; min-width: 40px; text-align: right;
+              font-variant-numeric: tabular-nums; }
+  .prog-note { font-size: 12px; color: #999; margin-top: 7px; }
+
   .order { background: #f8f9fa; border-radius: 12px; padding: 14px; margin-bottom: 10px;
            border-left: 4px solid #12b886; }
   .order.bad { border-left-color: #ff4d4f; }
@@ -295,6 +302,8 @@ async function submitUnlock() {
   const id = rid();
   const now = Date.now();
   const order = { id, bikeNo: no, status: 'sent', ts: now, updated: now };
+  order._pStart = now;
+  order._pDur = 35000;   // 开锁动画约 35 秒
 
   try {
     await post({
@@ -336,6 +345,8 @@ async function requestReturn(id) {
   const prev = o.status;
   o.status = 'return_sent';
   o.updated = Date.now();
+  o._pStart = Date.now();
+  o._pDur = 15000;   // 关锁动画约 15 秒
   saveOrders();
   render();   // 按钮立刻消失，不等网络
 
@@ -366,6 +377,35 @@ async function requestReturn(id) {
 }
 
 /* ---------- 渲染 ---------- */
+/* ---------- 进度条（纯前端，不发任何消息） ---------- */
+function progressHTML(o, color, note) {
+  return '<div class="prog">' +
+      '<div class="prog-track"><div class="prog-bar" id="pb-' + o.id +
+      '" style="background:' + color + '"></div></div>' +
+      '<span class="prog-pct" id="pp-' + o.id + '" style="color:' + color + '">1%</span>' +
+    '</div>' +
+    '<div class="prog-note">' + note + '</div>';
+}
+
+/* 最多走到 99%，真正的完成以车主回执为准 */
+function tickProgress() {
+  const now = Date.now();
+  for (let i = 0; i < orders.length; i++) {
+    const o = orders[i];
+    if (o.status !== 'sent' && o.status !== 'return_sent') continue;
+
+    const bar = document.getElementById('pb-' + o.id);
+    const pctEl = document.getElementById('pp-' + o.id);
+    if (!bar) continue;
+
+    if (!o._pStart) o._pStart = o.ts || now;
+    const dur = o._pDur || (o.status === 'sent' ? 35000 : 15000);
+    const pct = Math.min(99, Math.max(1, Math.round((now - o._pStart) * 99 / dur)));
+    bar.style.width = pct + '%';
+    if (pctEl) pctEl.textContent = pct + '%';
+  }
+}
+
 function render() {
   const el = document.getElementById('orders');
   if (!orders.length) {
@@ -384,7 +424,8 @@ function render() {
           action = '<button class="btn btn-ghost" style="margin-top:12px;font-size:14px;padding:11px" ' +
                    'onclick="retry(\'' + o.id + '\')">重新提交</button>';
         } else {
-          label = '等待朋友开锁'; cls = 'st-wait';
+          label = '正在开锁'; cls = 'st-wait';
+          action = progressHTML(o, '#12b886', '正在开锁，通常 25~35 秒');
         }
         break;
       case 'unlocked':
@@ -393,7 +434,8 @@ function render() {
                  'onclick="requestReturn(\'' + o.id + '\')">我到了 · 叫朋友还车</button>';
         break;
       case 'return_sent':
-        label = '正在还车'; cls = 'st-wait';
+        label = '正在关锁'; cls = 'st-wait';
+        action = progressHTML(o, '#fa8c16', '正在关锁，通常 10~15 秒');
         break;
       case 'returned':
         label = '已完成'; cls = 'st-idle'; cardCls = 'done';
@@ -466,6 +508,7 @@ document.getElementById('bikeNo').addEventListener('input', e => {
   if (NEED_PIN) document.getElementById('pin').classList.remove('hidden');
   loadOrders();
   render();
+  setInterval(tickProgress, 200);   // 进度条
   loop();
 })();
 </script>
