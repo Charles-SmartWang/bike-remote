@@ -115,10 +115,33 @@
    再回一条 ack，这里据此更新状态。
    ============================================================ */
 
-const NTFY  = 'https://ntfy.sh/';
-const TOPIC = 'bike-qsasj8qsa2vxb0xv';   // 必须和 autox-owner.js 一致
-const TOKEN = 'es6b7yxp';                // 必须和 autox-owner.js 一致
+const NTFY = 'https://ntfy.sh/';
 const NEED_PIN = false;                  // 车主设了口令才改成 true
+
+/* 密钥不放代码里：从分享链接的 ?topic=xxx&k=xxx 读取，并存在本机
+   这样仓库可以公开，链接本身才是私密的 */
+const _params = new URLSearchParams(location.search);
+let TOPIC = _params.get('topic');
+let TOKEN = _params.get('k') || '';
+
+if (TOPIC) {
+  try {
+    localStorage.setItem('guest.topic', TOPIC);
+    localStorage.setItem('guest.token', TOKEN);
+  } catch (e) {}
+} else {
+  try {
+    TOPIC = localStorage.getItem('guest.topic');
+    TOKEN = localStorage.getItem('guest.token') || '';
+  } catch (e) {}
+}
+
+if (!TOPIC) {
+  document.body.innerHTML =
+    '<div style="padding:60px 24px;text-align:center;color:#888;font-size:14px;line-height:1.9">' +
+    '链接不完整<br><span style="font-size:12px;color:#bbb">请用朋友发给你的完整链接打开</span></div>';
+  throw new Error('missing topic');
+}
 
 const PROTO_VER = 2;
 const LS_KEY = 'guest.orders.' + TOPIC;
