@@ -178,7 +178,8 @@ let orders = [];
 let lastSeen = null;
 let polling = false;
 let pollTimer = null;
-let ownerState = { status: '', ts: 0 };   // 全局占用状态，来自最后一条回执
+let ownerState = { status: '', ts: 0 };   // 最后一条回执
+let activeRides = {};                     // 按车号记录进行中的骑行
 
 /* ---------- 本地存储 ---------- */
 function loadOrders() {
@@ -260,8 +261,14 @@ async function poll() {
       // 不管是不是本机的单，都记下全局占用状态：
       // 另一个人打开同一个网页也能看到「占用中」
       if (d.status === 'unlocked' || d.status === 'returned') {
+        const ts = d.ts || (m.time ? m.time * 1000 : Date.now());
         ownerState.status = d.status;
-        ownerState.ts = d.ts || (m.time ? m.time * 1000 : Date.now());
+        ownerState.ts = ts;
+        // 按车号维护，两个人同时骑也能正确判断
+        if (d.bikeNo) {
+          if (d.status === 'unlocked') activeRides[d.bikeNo] = ts;
+          else delete activeRides[d.bikeNo];
+        }
         changed = true;
       }
 
@@ -410,11 +417,18 @@ function renderStatus() {
   const txt = document.getElementById('statusText');
   if (!dot || !txt) return;
 
-  const localRiding = orders.some(o => o.status === 'unlocked');
-  const riding = localRiding || ownerState.status === 'unlocked';
-  const fresh = ownerState.ts && Date.now() - ownerState.ts < 6 * 60 * 60 * 1000;
+  const now = Date.now();
 
-  if (riding && (localRiding || fresh)) {
+  // 超过 12 小时还没结束的记录自动作废，避免永远显示占用中
+  for (const k in activeRides) {
+    if (now - activeRides[k] > 12 * 60 * 60 * 1000) delete activeRides[k];
+  }
+
+  const localRiding = orders.some(o => o.status === 'unlocked');
+  const riding = localRiding || Object.keys(activeRides).length > 0;
+  const fresh = ownerState.ts && now - ownerState.ts < 6 * 60 * 60 * 1000;
+
+  if (riding) {
     dot.className = 'status-dot busy';
     txt.textContent = '占用中 · 有人正在骑行';
     txt.style.color = '#fa8c16';
