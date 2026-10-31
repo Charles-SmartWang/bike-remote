@@ -323,9 +323,22 @@ async function submitUnlock() {
 }
 
 /* ---------- 请求还车 ---------- */
+const returning = {};
+
 async function requestReturn(id) {
+  // 防连点：正在发送或已发送就直接忽略
+  if (returning[id]) { toast('还车请求已发送'); return; }
+
   const o = orders.find(x => x.id === id);
   if (!o) return;
+
+  returning[id] = true;
+  const prev = o.status;
+  o.status = 'return_sent';
+  o.updated = Date.now();
+  saveOrders();
+  render();   // 按钮立刻消失，不等网络
+
   try {
     await post({
       v: PROTO_VER,
@@ -339,14 +352,16 @@ async function requestReturn(id) {
       ts: Date.now()
     }, '还车请求 ' + o.bikeNo);
 
-    o.status = 'return_sent';
-    o.updated = Date.now();
-    saveOrders();
-    render();
     toast('已通知朋友还车');
     loop();
   } catch (e) {
+    o.status = prev;          // 发失败就退回原状态
+    o.updated = Date.now();
+    saveOrders();
+    render();
     toast('发送失败：' + e.message);
+  } finally {
+    delete returning[id];
   }
 }
 
