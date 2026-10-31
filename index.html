@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#12b886">
+<title>报车号 · 青桔</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #f5f6f8; min-height: 100vh; padding: 16px 14px 48px; color: #1a1a1a;
+  }
+  .header { text-align: center; margin-bottom: 18px; }
+  .header h1 { font-size: 20px; font-weight: 600; }
+  .header p { font-size: 12px; color: #999; margin-top: 5px; }
+
+  .card { background: #fff; border-radius: 14px; padding: 18px 16px; margin-bottom: 14px;
+          box-shadow: 0 2px 10px rgba(0,0,0,.04); }
+  .card-title { font-size: 14px; color: #666; font-weight: 600; margin-bottom: 12px;
+                display: flex; justify-content: space-between; align-items: center; }
+  .card-title .right { font-weight: 400; font-size: 12px; color: #aaa; }
+
+  .brand { display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+           border: 2px solid #12b886; border-radius: 12px; background: #f2fbf8; }
+  .brand .dot { width: 34px; height: 34px; border-radius: 10px; background: #12b886;
+                display: flex; align-items: center; justify-content: center;
+                color: #fff; font-size: 15px; font-weight: 700; }
+  .brand .name { font-size: 15px; font-weight: 600; }
+  .brand .tip { font-size: 11px; color: #888; margin-top: 2px; }
+
+  .input { width: 100%; border: 2px solid #e8e8e8; border-radius: 12px; padding: 16px;
+           font-size: 30px; text-align: center; letter-spacing: 9px; font-weight: 700;
+           outline: none; font-variant-numeric: tabular-nums; font-family: inherit;
+           background: #fff; }
+  .input:focus { border-color: #12b886; }
+  .input::placeholder { letter-spacing: 6px; font-weight: 400; color: #ccc; }
+
+  .btn { width: 100%; padding: 15px; border: none; border-radius: 12px; font-size: 16px;
+         font-weight: 600; cursor: pointer; transition: .15s; font-family: inherit; }
+  .btn:active { transform: scale(.985); }
+  .btn-go { background: linear-gradient(135deg,#12b886,#0ca678); color: #fff; }
+  .btn-return { background: linear-gradient(135deg,#ff9500,#f76707); color: #fff; }
+  .btn-ghost { background: #f0f2f5; color: #555; }
+  .btn:disabled { background: #e5e6e8 !important; color: #aaa !important; }
+
+  .order { background: #f8f9fa; border-radius: 12px; padding: 14px; margin-bottom: 10px;
+           border-left: 4px solid #12b886; }
+  .order.bad { border-left-color: #ff4d4f; }
+  .order.done { opacity: .62; }
+  .row1 { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .no { font-size: 20px; font-weight: 700; letter-spacing: 2px; font-variant-numeric: tabular-nums; }
+  .status { font-size: 11px; padding: 4px 9px; border-radius: 9px; white-space: nowrap; }
+  .st-wait { background: #fff7e6; color: #fa8c16; }
+  .st-run  { background: #f6ffed; color: #52c41a; }
+  .st-idle { background: #f0f0f0; color: #999; }
+  .st-bad  { background: #fff1f0; color: #ff4d4f; }
+  .meta { font-size: 12px; color: #999; margin-top: 5px; }
+
+  .empty { text-align: center; padding: 22px; color: #ccc; font-size: 13px; }
+
+  .toast { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
+           background: rgba(0,0,0,.82); color: #fff; padding: 12px 22px; border-radius: 10px;
+           font-size: 14px; z-index: 999; opacity: 0; transition: opacity .2s;
+           pointer-events: none; max-width: 82%; text-align: center; line-height: 1.5; }
+  .toast.show { opacity: 1; }
+
+  .hint { font-size: 12px; color: #aaa; line-height: 1.65; margin-top: 12px; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>报车号</h1>
+  <p id="subTitle">输入车身上的 8 位编号，朋友那边会自动开锁</p>
+</div>
+
+<div class="card">
+  <div class="card-title">车辆</div>
+  <div class="brand">
+    <div class="dot">青</div>
+    <div>
+      <div class="name">青桔单车</div>
+      <div class="tip">滴滴 App 内的青桔骑行</div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">车辆编号<span class="right" id="connLabel"></span></div>
+  <input type="tel" class="input" id="bikeNo" maxlength="8" placeholder="8 位数字"
+         inputmode="numeric" autocomplete="off">
+  <input type="tel" class="input hidden" id="pin" maxlength="4" placeholder="口令"
+         inputmode="numeric" autocomplete="off"
+         style="font-size:20px;letter-spacing:12px;margin-top:10px">
+  <button class="btn btn-go" id="submitBtn" onclick="submitUnlock()" disabled
+          style="margin-top:14px">提交开锁</button>
+  <p class="hint">编号在车锁和车身二维码下方。提交后朋友的手机会自动开锁，成功后这里会变成「骑行中」。</p>
+</div>
+
+<div class="card">
+  <div class="card-title">我的骑行<span class="right" id="pollLabel"></span></div>
+  <div id="orders"><div class="empty">暂无记录</div></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   报车号 · 用户端
+   ------------------------------------------------------------
+   把下面的 TOPIC / TOKEN 换成车主脚本里的同一组值即可。
+   页面直接 POST 到 ntfy，车主手机上的 AutoX.js 脚本收到后开锁，
+   再回一条 ack，这里据此更新状态。
+   ============================================================ */
+
+const NTFY  = 'https://ntfy.sh/';
+const TOPIC = 'bike-qsasj8qsa2vxb0xv';   // 必须和 autox-owner.js 一致
+const TOKEN = 'es6b7yxp';                // 必须和 autox-owner.js 一致
+const NEED_PIN = false;                  // 车主设了口令才改成 true
+
+const PROTO_VER = 2;
+const LS_KEY = 'guest.orders.' + TOPIC;
+
+let orders = [];
+let lastSeen = null;
+let polling = false;
+let pollTimer = null;
+
+/* ---------- 本地存储 ---------- */
+function loadOrders() {
+  try { orders = JSON.parse(localStorage.getItem(LS_KEY) || '[]'); }
+  catch (e) { orders = []; }
+}
+function saveOrders() {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(orders.slice(0, 30))); } catch (e) {}
+}
+
+/* ---------- 工具 ---------- */
+function rid() {
+  const C = 'abcdefghijkmnpqrstuvwxyz23456789';
+  let s = '';
+  if (window.crypto && crypto.getRandomValues) {
+    const b = new Uint8Array(12); crypto.getRandomValues(b);
+    for (let i = 0; i < 12; i++) s += C[b[i] % C.length];
+  } else {
+    for (let i = 0; i < 12; i++) s += C[Math.floor(Math.random() * C.length)];
+  }
+  return s;
+}
+
+function fmtTime(ts) {
+  const d = new Date(ts);
+  return d.getHours().toString().padStart(2, '0') + ':' +
+         d.getMinutes().toString().padStart(2, '0');
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+/* ---------- 发送 ---------- */
+async function post(obj, title) {
+  const payload = {
+    topic: TOPIC,
+    message: JSON.stringify(obj),
+    title: title,
+    priority: 4
+  };
+  const res = await fetch(NTFY, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+}
+
+/* ---------- 轮询回执 ---------- */
+async function poll() {
+  if (polling) return;
+  polling = true;
+  try {
+    const since = lastSeen || '10m';
+    const url = NTFY + TOPIC + '/json?poll=1&since=' + encodeURIComponent(since);
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+
+    const text = await res.text();
+    let changed = false;
+
+    for (const line of text.split('\n')) {
+      if (!line.trim()) continue;
+      let m;
+      try { m = JSON.parse(line); } catch (e) { continue; }
+      if (m.event !== 'message' || !m.message) continue;
+      if (m.id) lastSeen = m.id;
+
+      let d;
+      try { d = JSON.parse(m.message); } catch (e) { continue; }
+      if (d.v !== PROTO_VER || d.from !== 'owner' || d.action !== 'ack') continue;
+
+      const o = orders.find(x => x.id === d.ref);
+      if (!o) continue;
+
+      if (d.status === 'unlocked' && o.status === 'sent') {
+        o.status = 'unlocked'; o.updated = Date.now(); changed = true;
+        toast('已开锁，可以骑了');
+        try { navigator.vibrate && navigator.vibrate([100, 60, 100]); } catch (e) {}
+      } else if (d.status === 'returned') {
+        o.status = 'returned'; o.updated = Date.now(); changed = true;
+        toast('已还车，本次骑行结束');
+      } else if (d.status === 'failed') {
+        o.status = o.status === 'return_sent' ? 'return_failed' : 'failed';
+        o.updated = Date.now(); changed = true;
+        toast(o.status === 'return_failed' ? '朋友那边还车失败' : '朋友那边开锁失败');
+      }
+    }
+
+    if (changed) { saveOrders(); render(); }
+    setConn(true);
+  } catch (e) {
+    setConn(false);
+  } finally {
+    polling = false;
+  }
+}
+
+function setConn(ok) {
+  const el = document.getElementById('connLabel');
+  el.textContent = ok ? '已连接' : '连接中断';
+  el.style.color = ok ? '#52c41a' : '#ff4d4f';
+}
+
+function loop() {
+  clearTimeout(pollTimer);
+  poll().finally(() => {
+    const active = orders.some(o => o.status === 'sent' || o.status === 'return_sent');
+    pollTimer = setTimeout(loop, active ? 2000 : 6000);
+  });
+}
+
+/* ---------- 提交开锁 ---------- */
+async function submitUnlock() {
+  const input = document.getElementById('bikeNo');
+  const no = input.value.replace(/\D/g, '');
+  if (!/^\d{8}$/.test(no)) { toast('请输入 8 位编号'); return; }
+
+  const dup = orders.find(o => o.bikeNo === no &&
+    (o.status === 'sent' || o.status === 'unlocked') &&
+    Date.now() - o.ts < 60000);
+  if (dup) { toast('这辆车刚提交过'); return; }
+
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.textContent = '发送中…';
+
+  const id = rid();
+  const now = Date.now();
+  const order = { id, bikeNo: no, status: 'sent', ts: now, updated: now };
+
+  try {
+    await post({
+      v: PROTO_VER,
+      id: id,
+      from: 'guest',
+      action: 'unlock',
+      brand: 'qingju',
+      bikeNo: no,
+      k: TOKEN,
+      ts: now
+    }, '开锁请求 ' + no);
+
+    orders.unshift(order);
+    saveOrders();
+    input.value = '';
+    render();
+    toast('已发送，等朋友开锁');
+    loop();
+  } catch (e) {
+    toast('发送失败：' + e.message);
+  } finally {
+    btn.textContent = '提交开锁';
+    updateBtn();
+  }
+}
+
+/* ---------- 请求还车 ---------- */
+async function requestReturn(id) {
+  const o = orders.find(x => x.id === id);
+  if (!o) return;
+  try {
+    await post({
+      v: PROTO_VER,
+      id: rid(),
+      from: 'guest',
+      action: 'return',
+      ref: o.id,
+      brand: 'qingju',
+      bikeNo: o.bikeNo,
+      k: TOKEN,
+      ts: Date.now()
+    }, '还车请求 ' + o.bikeNo);
+
+    o.status = 'return_sent';
+    o.updated = Date.now();
+    saveOrders();
+    render();
+    toast('已通知朋友还车');
+    loop();
+  } catch (e) {
+    toast('发送失败：' + e.message);
+  }
+}
+
+/* ---------- 渲染 ---------- */
+function render() {
+  const el = document.getElementById('orders');
+  if (!orders.length) {
+    el.innerHTML = '<div class="empty">暂无记录</div>';
+    return;
+  }
+
+  el.innerHTML = orders.map(o => {
+    let label = '', cls = 'st-wait', action = '', cardCls = '';
+
+    switch (o.status) {
+      case 'sent':
+        label = '等待朋友开锁'; cls = 'st-wait';
+        break;
+      case 'unlocked':
+        label = '骑行中'; cls = 'st-run';
+        action = '<button class="btn btn-return" style="margin-top:12px;font-size:15px;padding:13px" ' +
+                 'onclick="requestReturn(\'' + o.id + '\')">我到了 · 叫朋友还车</button>';
+        break;
+      case 'return_sent':
+        label = '正在还车'; cls = 'st-wait';
+        break;
+      case 'returned':
+        label = '已完成'; cls = 'st-idle'; cardCls = 'done';
+        break;
+      case 'failed':
+        label = '开锁失败'; cls = 'st-bad'; cardCls = 'bad';
+        action = '<button class="btn btn-ghost" style="margin-top:12px;font-size:14px;padding:11px" ' +
+                 'onclick="retry(\'' + o.id + '\')">重新提交</button>';
+        break;
+      case 'return_failed':
+        label = '还车失败'; cls = 'st-bad'; cardCls = 'bad';
+        break;
+      default:
+        label = o.status;
+    }
+
+    return '<div class="order ' + cardCls + '">' +
+      '<div class="row1">' +
+        '<div class="no">' + o.bikeNo + '</div>' +
+        '<div class="status ' + cls + '">' + label + '</div>' +
+      '</div>' +
+      '<div class="meta">青桔 · ' + fmtTime(o.ts) + '</div>' +
+      action +
+    '</div>';
+  }).join('');
+}
+
+async function retry(id) {
+  const o = orders.find(x => x.id === id);
+  if (!o) return;
+  const no = o.bikeNo;
+  o.status = 'sent';
+  o.updated = Date.now();
+  render();
+  try {
+    await post({
+      v: PROTO_VER, id: o.id, from: 'guest', action: 'unlock',
+      brand: 'qingju', bikeNo: no, k: TOKEN, ts: Date.now()
+    }, '开锁请求 ' + no);
+    o.ts = Date.now();
+    saveOrders();
+    toast('已重新提交');
+    loop();
+  } catch (e) {
+    toast('发送失败：' + e.message);
+  }
+}
+
+/* ---------- 输入 ---------- */
+function updateBtn() {
+  const v = document.getElementById('bikeNo').value.replace(/\D/g, '');
+  document.getElementById('submitBtn').disabled = v.length !== 8;
+}
+
+document.getElementById('bikeNo').addEventListener('input', e => {
+  e.target.value = e.target.value.replace(/\D/g, '').slice(0, 8);
+  updateBtn();
+});
+
+/* ---------- 初始化 ---------- */
+(function init() {
+  if (NEED_PIN) document.getElementById('pin').classList.remove('hidden');
+  loadOrders();
+  render();
+  loop();
+  setInterval(() => {
+    const el = document.getElementById('pollLabel');
+    if (lastSeen) el.textContent = '同步中';
+  }, 5000);
+})();
+</script>
+</body>
+</html>
