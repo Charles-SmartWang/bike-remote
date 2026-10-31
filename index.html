@@ -262,8 +262,9 @@ function setConn(ok) {
 function loop() {
   clearTimeout(pollTimer);
   poll().finally(() => {
+    // ntfy.sh 免费版按请求次数限流，轮询别太密
     const active = orders.some(o => o.status === 'sent' || o.status === 'return_sent');
-    pollTimer = setTimeout(loop, active ? 2000 : 6000);
+    pollTimer = setTimeout(loop, active ? 5000 : 15000);
   });
 }
 
