@@ -44,6 +44,16 @@
   .btn-ghost { background: #f0f2f5; color: #555; }
   .btn:disabled { background: #e5e6e8 !important; color: #aaa !important; }
 
+  .status-bar {
+    display: flex; align-items: center; justify-content: center; gap: 9px;
+    background: #fff; border-radius: 12px; padding: 13px 16px; margin-bottom: 14px;
+    font-size: 14px; font-weight: 600; color: #999;
+    box-shadow: 0 2px 10px rgba(0,0,0,.04); transition: color .2s;
+  }
+  .status-dot { width: 9px; height: 9px; border-radius: 50%; background: #ccc; flex: none; }
+  .status-dot.on   { background: #2bb566; box-shadow: 0 0 0 4px rgba(43,181,102,.16); }
+  .status-dot.busy { background: #fa8c16; box-shadow: 0 0 0 4px rgba(250,140,22,.16); }
+
   .prog { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
   .prog-track { flex: 1; height: 7px; background: #e9edf2; border-radius: 99px; overflow: hidden; }
   .prog-bar { height: 100%; width: 0; border-radius: 99px; transition: width .25s linear; }
@@ -81,6 +91,11 @@
 <div class="header">
   <h1>报车号</h1>
   <p id="subTitle">输入车身上的 8 位编号，朋友那边会自动开锁</p>
+</div>
+
+<div class="status-bar" id="statusBar">
+  <span class="status-dot" id="statusDot"></span>
+  <span id="statusText">正在确认占用状态…</span>
 </div>
 
 <div class="card">
@@ -163,6 +178,7 @@ let orders = [];
 let lastSeen = null;
 let polling = false;
 let pollTimer = null;
+let ownerState = { status: '', ts: 0 };   // 全局占用状态，来自最后一条回执
 
 /* ---------- 本地存储 ---------- */
 function loadOrders() {
@@ -221,7 +237,8 @@ async function poll() {
   if (polling) return;
   polling = true;
   try {
-    const since = lastSeen || '10m';
+    // 首次拉 12 小时，这样新打开页面也能从最后一条回执判断占用状态
+    const since = lastSeen || '12h';
     const url = NTFY + TOPIC + '/json?poll=1&since=' + encodeURIComponent(since);
     const res = await fetch(url, { cache: 'no-store' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -239,6 +256,14 @@ async function poll() {
       let d;
       try { d = JSON.parse(m.message); } catch (e) { continue; }
       if (d.v !== PROTO_VER || d.from !== 'owner' || d.action !== 'ack') continue;
+
+      // 不管是不是本机的单，都记下全局占用状态：
+      // 另一个人打开同一个网页也能看到「占用中」
+      if (d.status === 'unlocked' || d.status === 'returned') {
+        ownerState.status = d.status;
+        ownerState.ts = d.ts || (m.time ? m.time * 1000 : Date.now());
+        changed = true;
+      }
 
       const o = orders.find(x => x.id === d.ref);
       if (!o) continue;
@@ -377,6 +402,33 @@ async function requestReturn(id) {
 }
 
 /* ---------- 渲染 ---------- */
+/* ---------- 占用状态 ---------- */
+/* 只根据最后一条回执推断，不额外发任何消息：
+   unlocked = 有人在骑（占用中），returned = 空闲 */
+function renderStatus() {
+  const dot = document.getElementById('statusDot');
+  const txt = document.getElementById('statusText');
+  if (!dot || !txt) return;
+
+  const localRiding = orders.some(o => o.status === 'unlocked');
+  const riding = localRiding || ownerState.status === 'unlocked';
+  const fresh = ownerState.ts && Date.now() - ownerState.ts < 6 * 60 * 60 * 1000;
+
+  if (riding && (localRiding || fresh)) {
+    dot.className = 'status-dot busy';
+    txt.textContent = '占用中 · 有人正在骑行';
+    txt.style.color = '#fa8c16';
+  } else if (ownerState.status === 'returned' && fresh) {
+    dot.className = 'status-dot on';
+    txt.textContent = '空闲 · 可以借车';
+    txt.style.color = '#2bb566';
+  } else {
+    dot.className = 'status-dot';
+    txt.textContent = '暂无骑行记录';
+    txt.style.color = '#999';
+  }
+}
+
 /* ---------- 进度条（纯前端，不发任何消息） ---------- */
 function progressHTML(o, color, note) {
   return '<div class="prog">' +
@@ -508,6 +560,8 @@ document.getElementById('bikeNo').addEventListener('input', e => {
   if (NEED_PIN) document.getElementById('pin').classList.remove('hidden');
   loadOrders();
   render();
+  renderStatus();
+  setInterval(renderStatus, 5000);  // 占用状态
   setInterval(tickProgress, 200);   // 进度条
   loop();
 })();
