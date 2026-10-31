@@ -319,6 +319,12 @@ async function submitUnlock() {
   const no = input.value.replace(/\D/g, '');
   if (!/^\d{8}$/.test(no)) { toast('请输入 8 位编号'); return; }
 
+  // 占用中直接拦截
+  if (isOccupied()) {
+    toast('占用中 · 等对方还车后再借');
+    return;
+  }
+
   // 同一辆车还有进行中的单就别重复提交
   const dup = orders.find(o =>
     o.bikeNo === no &&
@@ -430,7 +436,9 @@ function renderStatus() {
 
   if (riding) {
     dot.className = 'status-dot busy';
-    txt.textContent = '占用中 · 有人正在骑行';
+    txt.innerHTML = '占用中 · 暂不可借' +
+      '<a href="javascript:void(0)" onclick="forceFree()" ' +
+      'style="color:#bbb;font-size:12px;font-weight:400;margin-left:8px">解除</a>';
     txt.style.color = '#fa8c16';
   } else if (ownerState.status === 'returned' && fresh) {
     dot.className = 'status-dot on';
@@ -441,6 +449,23 @@ function renderStatus() {
     txt.textContent = '暂无骑行记录';
     txt.style.color = '#999';
   }
+}
+
+/* 是否有人正在骑（占用中） */
+function isOccupied() {
+  return orders.some(o => o.status === 'unlocked') ||
+         Object.keys(activeRides).length > 0;
+}
+
+/* 手动解除占用：有人直接合锁结束行程时，状态不会自动清 */
+function forceFree() {
+  if (!confirm('确认强制解除占用？\n（只解除网页显示，不影响手机上的骑行状态）')) return;
+  activeRides = {};
+  orders.forEach(o => { if (o.status === 'unlocked') o.status = 'returned'; });
+  saveOrders();
+  render();
+  renderStatus();
+  toast('已解除占用');
 }
 
 /* ---------- 进度条（纯前端，不发任何消息） ---------- */
